@@ -190,6 +190,8 @@ class StackedDotPlot:
                                    pident = float(pident),
                                    query = query,
                                    target = target)
+
+            # @CTB check orientation somehow!
   
             # identity and length filter - @CTB move outside!
 #            if region.pident < 95 or abs(region.qend - region.qstart) < 0.5:
