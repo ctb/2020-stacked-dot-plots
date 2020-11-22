@@ -11,9 +11,25 @@ See [the source in `alignplot.py`](./alignplot.py) and
 
 ## examples
 
+### Shared sequences (contamination?) between two Genbank genomes.
+
+Here, the Rokubacterium (red, x axis) is probably contaminated by sequences
+from the Acidobacterium (y axis coordinates).
+
 ![](images/example1.png)
 
+### Shared sequences between a TARA MAG and a Genbank genome.
+
+The TARA binned genome/MAG is on the y axis, the Genbank genome is on x in
+red.
+
 ![](images/example2.png)
+
+### Shared sequences between a TARA MAG and two Genbank genomes.
+
+
+The TARA binned genome/MAG is on the y axis, the first Genbank genome
+is on x in red, the second is on x in blue.
 
 ## contact
 

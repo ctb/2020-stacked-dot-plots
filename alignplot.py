@@ -160,7 +160,7 @@ class StackedDotPlot:
         
     def run_nucmer(self, targetfile):
         "Run nucmer and show coords."
-        print("running nucmer & show-coords...")
+        print(f"running nucmer & show-coords for {targetfile}...")
         tempdir = tempfile.mkdtemp()
 
         queryfile = self.queryfile
