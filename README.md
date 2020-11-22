@@ -27,9 +27,10 @@ red.
 
 ### Shared sequences between a TARA MAG and two Genbank genomes.
 
-
 The TARA binned genome/MAG is on the y axis, the first Genbank genome
 is on x in red, the second is on x in blue.
+
+![](images/example3.png)
 
 ## contact
 
