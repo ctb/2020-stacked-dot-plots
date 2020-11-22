@@ -14,7 +14,11 @@ import shutil
 import subprocess
 import os
 import glob
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+
+
+AlignedRegion = namedtuple("AlignedRegion",
+           "query, target, qstart, qend, tstart, tend, pident, qsize, tsize")
 
 
 def glob_all(pattern, endings):
@@ -87,12 +91,11 @@ class StackedDotPlot:
             name = self.target_names[t_acc]
 
             if self.use_mashmap:
-                sum_shared, starts, ends = self.run_mashmap(targetfile)
+                regions = self.run_mashmap(targetfile)
             else:
-                sum_shared, starts, ends = self.run_nucmer(targetfile)
+                regions = self.run_nucmer(targetfile)
 
-            print(f'shared w/{name}: {sum_shared:.1f}kb')
-            results[t_acc] = (sum_shared, starts, ends)
+            results[t_acc] = regions
 
         self.results = results
         return self.plot()
@@ -115,48 +118,25 @@ class StackedDotPlot:
     def _read_mashmap(self, filename):
         "Parse the mashmap output."
         fp = open(filename, 'rt')
-        starts = []
-        ends = []
 
-        q_starts = self.q_starts
-        q_sofar = self.q_sofar
-        t_starts = {}
-        t_sofar = 0
-        
-        sumshared = 0
+        regions = []
         for line in fp:
             line = line.strip().split()
             query, qsize, qstart, qend, strand, target, tsize, tstart, tend, pident = line
-            qsize = int(qsize) / 1e3
-            qstart = int(qstart) / 1e3
-            qend = int(qend) / 1e3
-            tsize = int(tsize) / 1e3
-            tstart = int(tstart) / 1e3
-            tend = int(tend) / 1e3
-            pident = float(pident)
+            region = AlignedRegion(qsize = int(qsize) / 1e3,
+                                   qstart = int(qstart) / 1e3,
+                                   qend = int(qend) / 1e3,
+                                   tsize = int(tsize) / 1e3,
+                                   tstart = int(tstart) / 1e3,
+                                   tend = int(tend) / 1e3,
+                                   pident = float(pident),
+                                   query = query,
+                                   target = target)
 
-            q_base = q_starts.get(query)
-            if q_base is None:
-                size = qsize
-                q_starts[query] = q_sofar
-                q_base = q_sofar
-                q_sofar += size
+            assert region.qend > region.qstart
+            regions.append(region)
 
-            t_base = t_starts.get(target)
-            if t_base is None:
-                size = tsize
-                t_starts[target] = t_sofar
-                t_base = t_sofar
-                t_sofar += size
-
-            assert qend > qstart
-            sumshared += qend - qstart
-
-            starts.append((t_base + tstart, q_base + qstart))
-            ends.append((t_base + tend, q_base + qend))
-
-        self.q_sofar = q_sofar
-        return sumshared, starts, ends
+        return regions
         
     def run_nucmer(self, targetfile):
         "Run nucmer and show coords."
@@ -197,56 +177,40 @@ class StackedDotPlot:
         assert lines[1].startswith('NUCMER'), (filename, lines[0])
         assert not lines[2].strip()
 
-        sumshared = 0
-        starts = []
-        ends = []
-        q_starts = self.q_starts
-        q_sofar = self.q_sofar
-        t_starts = {}
-        t_sofar = 0
-        
+        regions = []
         for line in lines[4:]:
             line = line.strip().split('\t')
             qstart, qend, tstart, tend, qsize, tsize, pident, query, target = line
-            qsize = int(qsize) / 1e3
-            qstart = int(qstart) / 1e3
-            qend = int(qend) / 1e3
-            tsize = int(tsize) / 1e3
-            tstart = int(tstart) / 1e3
-            tend = int(tend) / 1e3
-            pident = float(pident)
+            region = AlignedRegion(qsize = int(qsize) / 1e3,
+                                   qstart = int(qstart) / 1e3,
+                                   qend = int(qend) / 1e3,
+                                   tsize = int(tsize) / 1e3,
+                                   tstart = int(tstart) / 1e3,
+                                   tend = int(tend) / 1e3,
+                                   pident = float(pident),
+                                   query = query,
+                                   target = target)
   
-            # identity and length filter
-            if pident < 95 or abs(qend - qstart) < 0.5:
-                continue
+            # identity and length filter - @CTB move outside!
+#            if region.pident < 95 or abs(region.qend - region.qstart) < 0.5:
+#                continue
 
-            q_base = q_starts.get(query)
-            if q_base is None:
-                size = qsize
-                q_starts[query] = q_sofar
-                q_base = q_sofar
-                q_sofar += size
+            regions.append(region)
 
-            t_base = t_starts.get(target)
-            if t_base is None:
-                size = tsize
-                t_starts[target] = t_sofar
-                t_base = t_sofar
-                t_sofar += size
-
-            sumshared += int(qend) - int(qstart)
-
-            starts.append((t_base + tstart, q_base + qstart))
-            ends.append((t_base + tend, q_base + qend))
-
-        self.q_sofar = q_sofar
-        return sumshared, starts, ends
+        return regions
         
     def plot(self):
         "Do the actual stacked dotplot plotting."
-        plt.ylabel(f'{self.q_acc}: {self.query_name}')
+        if self.q_acc == self.query_name:
+            ylabel_text = 'self.q_acc'
+        else:
+            ylabel_text = f'{self.q_acc}: {self.query_name}'
+        plt.ylabel(ylabel_text)
 
         colors = ('r-', 'b-', 'g-')
+
+        q_starts = {}
+        q_sofar = 0
 
         # the use of max_x is what makes it a stacked dotplot!! :)
         max_x = 0                         # track where to start each target
@@ -254,19 +218,48 @@ class StackedDotPlot:
         # iterate over each set of features, plotting lines.
         for t_acc, color in zip(self.t_acc_list, colors):
             name = self.target_names[t_acc]
-            sum_shared, starts, ends = self.results[t_acc]
+            # @CTB if we move this out of the loop and plot self-x-self
+            # there is an interestng effect of showing distribution. exploreme!
+            t_starts = {}
+            t_sofar = 0
 
-            this_max_x = 0
+            sum_shared = 0
             line = None
-            for (x_0, y_0), (x_1, y_1) in zip(starts, ends):
+            this_max_x = 0
+            for region in self.results[t_acc]:
+                sum_shared += region.qend - region.qstart
+
+                # calculate the base y position for this query contig --
+                q_base = q_starts.get(region.query)
+                if q_base is None:
+                    q_starts[region.query] = q_sofar
+                    q_base = q_sofar
+                    q_sofar += region.qsize
+
+                # calculate the base x position for this target contig --
+                t_base = t_starts.get(region.target)
+                if t_base is None:
+                    t_starts[region.target] = t_sofar
+                    t_base = t_sofar
+                    t_sofar += region.tsize
+
+                x_0 = t_base + region.tstart
+                y_0 = q_base + region.qstart
+
+                x_1 = t_base + region.tend
+                y_1 = q_base + region.qend
+
+                # stack 'em horizontally with max_x
                 line = plt.plot((x_0 + max_x, x_1 + max_x), (y_0, y_1), color)
                 this_max_x = max(this_max_x, x_0, x_1)
 
+            # label the last plotted line w/the right name to make legend
             if line:
                 line[0].set_label(name)
 
             # "stack" the dotplots horizontally.
             max_x = this_max_x
+            print(f'shared w/{name}: {sum_shared:.1f}kb')
 
         plt.legend(loc='lower right')
             
@@ -280,9 +273,11 @@ def main():
     _ = dotplot()
 
     print('saving')
-    plt.savefig('/tmp/test.png')
+    plt.savefig('/tmp/test-nucmer.png')
 
+    plt.cla()
     dotplot.use_mashmap = True
+
     _ = dotplot()
 
     print('saving')
