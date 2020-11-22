@@ -9,4 +9,14 @@ a query genome and one or more target genomes; plot, dot-plot style.
 See [the source in `alignplot.py`](./alignplot.py) and
 [the `dotplot` notebook](./dotplot.ipynb) for more info.
 
+## examples
+
+![](images/example1.png)
+
+![](images/example2.png)
+
+## contact
+
+Titus Brown, titus@idyll.org
+
 CTB Nov 2020
