@@ -2,10 +2,11 @@
 """
 Class etc to produce a stacked dotplot and other genome overlap/contamination
 stats.
+
+TODO:
+* argparse the thang
 """
 import sys
-import argparse
-import screed
 import matplotlib.pyplot as plt
 import csv
 import tempfile
@@ -123,7 +124,6 @@ class StackedDotPlot:
         t_sofar = 0
         
         sumshared = 0
-        matches = defaultdict(list)
         for line in fp:
             line = line.strip().split()
             query, qsize, qstart, qend, strand, target, tsize, tstart, tend, pident = line
@@ -160,7 +160,7 @@ class StackedDotPlot:
         
     def run_nucmer(self, targetfile):
         "Run nucmer and show coords."
-        print("running nucmer & show-coords...")
+        print(f"running nucmer & show-coords for {targetfile}...")
         tempdir = tempfile.mkdtemp()
 
         queryfile = self.queryfile
