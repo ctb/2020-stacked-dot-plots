@@ -202,10 +202,11 @@ class StackedDotPlot:
     def plot(self):
         "Do the actual stacked dotplot plotting."
         if self.q_acc == self.query_name:
-            ylabel_text = 'self.q_acc'
+            ylabel_text = f'{self.q_acc} (coords in kb)'
         else:
-            ylabel_text = f'{self.q_acc}: {self.query_name}'
+            ylabel_text = f'{self.q_acc}: {self.query_name} (kb)'
         plt.ylabel(ylabel_text)
+        plt.xlabel('coordinates of matches (scaled to kb)')
 
         colors = ('r-', 'b-', 'g-')
 
