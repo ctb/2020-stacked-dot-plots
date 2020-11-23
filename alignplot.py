@@ -80,10 +80,18 @@ class StackedDotPlot:
                 if row['acc'] in self.target_names:
                     self.target_names[row['acc']] = row['ncbi_tax_name']
 
-        self.q_starts = {}
-        self.q_sofar = 0
+    def get_targetfile(self, t_acc):
+        targetfile = None
+        for find_t_acc, find_targetfile in zip(self.t_acc_list,
+                                               self.targetfiles):
+            if find_t_acc == t_acc:
+                targetfile = find_targetfile
+                break
 
-    def __call__(self,):
+        assert targetfile
+        return targetfile
+
+    def __call__(self):
         "Run all the things, produce a plot."
         results = {}
 
