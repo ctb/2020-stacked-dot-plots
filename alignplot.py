@@ -124,10 +124,7 @@ class AlignmentContainer:
 
     def __init__(
         self, q_acc, t_acc_list, info_file=None, genomes_dir=None,
-        use_mashmap=False,
     ):
-        self.use_mashmap = use_mashmap
-
         if genomes_dir is None:
             genomes_dir = "."
         else:
@@ -173,14 +170,14 @@ class AlignmentContainer:
         assert targetfile
         return targetfile
 
-    def __call__(self):
+    def run(self, use_mashmap=False):
         "Run all the things, save the results."
         results = {}
 
         for t_acc, targetfile in zip(self.t_acc_list, self.targetfiles):
             name = self.target_names[t_acc]
 
-            if self.use_mashmap:
+            if use_mashmap:
                 regions = self.run_mashmap(targetfile)
             else:
                 regions = self.run_nucmer(targetfile)
@@ -481,7 +478,7 @@ class AlignmentSlopeDiagram:
     def __init__(self, alignment):
         self.alignment = alignment
         
-    def calculate(self, select_n=10, plot_all_contigs=False):
+    def calculate(self, select_n=None, plot_all_contigs=False):
         alignment = self.alignment
 
         regions = []
@@ -557,7 +554,9 @@ class AlignmentSlopeDiagram:
         self.to_contig_sizes = target_list
         self.alignments = align
         
-    def plot(self, use_labels=True):
+    def plot(self, select_n=None, plot_all_contigs=False, use_labels=True):
+        self.calculate(select_n=select_n, plot_all_contigs=plot_all_contigs)
+
         from_contigs = self.from_contig_sizes
         to_contigs = self.to_contig_sizes
         alignments = self.alignments
@@ -649,7 +648,7 @@ def main():
     alignment = AlignmentContainer(
         args.query_acc, args.target_accs, args.info_file, args.genomes_directory,
     )
-    alignment()
+    alignment.run()
 
     dotplot = StackedDotPlot(alignment)
     dotplot.plot()
@@ -658,8 +657,7 @@ def main():
     plt.savefig(f"{args.output_prefix}-nucmer.png")
     plt.cla()
 
-    alignment.use_mashmap = True
-    alignment()
+    alignment.run(use_mashmap=True)
 
     dotplot = StackedDotPlot(alignment)
     dotplot.plot()
@@ -684,7 +682,6 @@ def main():
     plt.cla()
 
     slope = AlignmentSlopeDiagram(alignment)
-    slope.calculate()
     fig = slope.plot()
 
     print(f"saving {args.output_prefix}-alignplot.png")
