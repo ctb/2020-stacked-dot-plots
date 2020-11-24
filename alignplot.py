@@ -8,7 +8,10 @@ TODO:
 """
 import sys
 import argparse
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
 import csv
 import tempfile
 import shutil
@@ -91,18 +94,24 @@ def region_size(region, by_type):
     raise Exception(f"unhandled by_type {by_type}")
 
 
-def load_contig_sizes(genomefile):
+def load_contig_sizes(genomefile, init_d=None):
     "load in all the actual contig sizes for this genome (in kb)"
-    all_sizes = {}
-    for record in screed.open(genomefile):  # @CTB
-        all_sizes[record.name.split()[0]] = len(record.sequence) / 1e3
+    if init_d is None:
+        all_sizes = {}
+    else:
+        all_sizes = init_d
+
+    for record in screed.open(genomefile):
+        name = record.name.split()[0]
+        assert name not in all_sizes
+        all_sizes[name] = len(record.sequence) / 1e3
 
     return all_sizes
 
 
-class StackedDotPlot:
+class AlignmentContainer:
     """
-    Build a stacked dot plot.
+    Build an alignment between a query and a bunch of targets.
 
     Takes:
     * query accession,
@@ -114,10 +123,8 @@ class StackedDotPlot:
     endings = ".gz", ".fa", ".fna"
 
     def __init__(
-        self, q_acc, t_acc_list, info_file=None, genomes_dir=None, use_mashmap=False
+        self, q_acc, t_acc_list, info_file=None, genomes_dir=None,
     ):
-        self.use_mashmap = use_mashmap
-
         if genomes_dir is None:
             genomes_dir = "."
         else:
@@ -163,14 +170,14 @@ class StackedDotPlot:
         assert targetfile
         return targetfile
 
-    def __call__(self):
-        "Run all the things, produce a plot."
+    def run(self, use_mashmap=False):
+        "Run all the things, save the results."
         results = {}
 
         for t_acc, targetfile in zip(self.t_acc_list, self.targetfiles):
             name = self.target_names[t_acc]
 
-            if self.use_mashmap:
+            if use_mashmap:
                 regions = self.run_mashmap(targetfile)
             else:
                 regions = self.run_nucmer(targetfile)
@@ -178,10 +185,9 @@ class StackedDotPlot:
             results[t_acc] = regions
 
         self.results = results
-        return self.plot()
 
     def run_mashmap(self, targetfile):
-        "Run mashmap. Deprecated."
+        "Run mashmap instead of nucmer."
         print("running mashmap...")
         tempdir = tempfile.mkdtemp()
         outfile = os.path.join(tempdir, "mashmap.out")
@@ -298,12 +304,19 @@ class StackedDotPlot:
 
         return regions
 
+
+class StackedDotPlot:
+    def __init__(self, alignment):
+        self.alignment = alignment
+
     def plot(self):
         "Do the actual stacked dotplot plotting."
-        if self.q_acc == self.query_name:
-            ylabel_text = f"{self.q_acc} (coords in kb)"
+        alignment = self.alignment
+
+        if alignment.q_acc == alignment.query_name:
+            ylabel_text = f"{alignment.q_acc} (coords in kb)"
         else:
-            ylabel_text = f"{self.q_acc}: {self.query_name} (kb)"
+            ylabel_text = f"{alignment.q_acc}: {alignment.query_name} (kb)"
         plt.ylabel(ylabel_text)
         plt.xlabel("coordinates of matches (scaled to kb)")
 
@@ -316,8 +329,8 @@ class StackedDotPlot:
         max_x = 0  # track where to start each target
 
         # iterate over each set of features, plotting lines.
-        for t_acc, color in zip(self.t_acc_list, colors):
-            name = self.target_names[t_acc]
+        for t_acc, color in zip(alignment.t_acc_list, colors):
+            name = alignment.target_names[t_acc]
             # @CTB if we move this out of the loop and plot self-x-self
             # there is an interestng effect of showing distribution. exploreme!
             t_starts = {}
@@ -326,7 +339,7 @@ class StackedDotPlot:
             sum_shared = 0
             line = None
             this_max_x = 0
-            for region in self.results[t_acc]:
+            for region in alignment.results[t_acc]:
                 sum_shared += region.qend - region.qstart
 
                 # calculate the base y position for this query contig --
@@ -366,10 +379,11 @@ class StackedDotPlot:
         return plt.gcf()
 
     def target_response_curve(self, t_acc):
-        regions = self.results[t_acc]
+        alignment = self.alignment
+        regions = alignment.results[t_acc]
 
         # first, find the targetfile (genome) for this accession
-        targetfile = self.get_targetfile(t_acc)
+        targetfile = alignment.get_targetfile(t_acc)
 
         # calculate and sort region summed kb in alignments over 95%
         regions_by_target = group_regions_by(regions, "target")
@@ -411,12 +425,14 @@ class StackedDotPlot:
         return numpy.array(x), numpy.array(y), saturation_point
 
     def query_response_curve(self):
+        alignment = self.alignment
+
         # aggregate regions over _all_ results
         regions = []
-        for k, v in self.results.items():
+        for k, v in alignment.results.items():
             regions.extend(v)
 
-        queryfile = self.queryfile
+        queryfile = alignment.queryfile
 
         # calculate and sort region summed kb in alignments over 95%
         regions_by_query = group_regions_by(regions, "query")
@@ -458,6 +474,163 @@ class StackedDotPlot:
         return numpy.array(x), numpy.array(y), saturation_point
 
 
+class AlignmentSlopeDiagram:
+    def __init__(self, alignment):
+        self.alignment = alignment
+        
+    def calculate(self, select_n=None, plot_all_contigs=False):
+        alignment = self.alignment
+
+        regions = []
+        for k, v in alignment.results.items():
+            regions.extend(v)
+
+        queryfile = alignment.queryfile
+
+        # calculate and sort region summed kb in alignments over 95%            
+        regions_by_query = group_regions_by(regions, "query")
+        regions_aligned_kb = calc_regions_aligned_bp(
+            regions_by_query, "query", filter_by=lambda r: r.pident >= 95
+        )
+        region_items = list(regions_aligned_kb.items())
+        region_items.sort(key=lambda x: -x[1])
+        
+        if select_n:
+            region_items = region_items[:select_n]
+
+        query_sizes = load_contig_sizes(alignment.queryfile)
+
+        target_sizes = {}
+        for targetfile in alignment.targetfiles:
+            load_contig_sizes(targetfile, target_sizes)
+
+
+        query_list = []
+        target_list = []
+        align = []
+
+        query_idx_d = {}
+        target_idx_d = {}
+
+        for name, aligned_kb in region_items:
+            for alignment in regions_by_query[name]:
+                a = alignment
+
+                query_idx = query_idx_d.get(a.query)
+                if query_idx is None:
+                    query_idx_d[a.query] = len(query_list)
+                    query_idx = len(query_list)
+                    query_list.append(query_sizes[a.query])
+
+                target_idx = target_idx_d.get(a.target)
+                if target_idx is None:
+                    target_idx_d[a.target] = len(target_list)
+                    target_idx = len(target_list)
+                    target_list.append(target_sizes[a.target])
+
+                assert a.qstart <= query_list[query_idx]
+                assert a.qstart >= 0
+                assert a.qend <= query_list[query_idx]
+                assert a.qend >= 0
+
+                assert a.tstart <= target_list[target_idx], (a.tstart, target_idx, target_list[target_idx])
+                assert a.tstart >= 0
+                assert a.tend <= target_list[target_idx]
+                assert a.tend >= 0
+
+                align.append((query_idx, a.qstart, a.qend,
+                              target_idx, a.tstart, a.tend))
+
+        if plot_all_contigs:
+            remaining_query = set(query_sizes) - set(query_idx_d)
+            remaining_target = set(target_sizes) - set(target_idx_d)
+
+            for query in remaining_query:
+                query_list.append(query_sizes[query])
+            for target in remaining_target:
+                target_list.append(target_sizes[target])
+                
+        self.from_contig_sizes = query_list
+        self.to_contig_sizes = target_list
+        self.alignments = align
+        
+    def plot(self, select_n=None, plot_all_contigs=False, use_labels=True):
+        self.calculate(select_n=select_n, plot_all_contigs=plot_all_contigs)
+
+        from_contigs = self.from_contig_sizes
+        to_contigs = self.to_contig_sizes
+        alignments = self.alignments
+        
+        fig, ax = plt.subplots()
+        patches = []
+
+        from_sum = sum(from_contigs)
+        to_sum = sum(to_contigs)
+        
+        from_bases = [0]
+        sofar = 0
+        for i in from_contigs:
+            sofar += i
+            from_bases.append(sofar)
+        
+        to_bases = [0]
+        sofar = 0
+        for i in to_contigs:
+            sofar += i
+            to_bases.append(sofar)
+
+        for (from_i, qstart, qend, to_i, tstart, tend) in alignments:
+            assert qstart <= from_contigs[from_i]
+            assert qstart >= 0
+            assert qend <= from_contigs[from_i]
+            assert qend >= 0
+
+            assert tstart <= to_contigs[to_i], (tstart, to_i, to_contigs[to_i])
+            assert tstart >= 0
+            assert tend <= to_contigs[to_i]
+            assert tend >= 0
+
+            upper_left = (0, 1 - (from_bases[from_i] + qstart) / from_sum)
+            upper_right = (0, 1 - (from_bases[from_i] + qend) / from_sum)
+            bottom_right = (1, 1 - (to_bases[to_i] + tend) / to_sum)
+            bottom_left = (1, 1 - (to_bases[to_i] + tstart) / to_sum)
+ 
+            polygon = Polygon((upper_left, upper_right, bottom_right, bottom_left), True)
+            patches.append(polygon)
+
+        patches.append(polygon)
+
+        p = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.4)
+
+        colors = 100*numpy.random.rand(len(patches))
+        p.set_array(numpy.array(colors))
+
+        ax.add_collection(p)
+
+        ax.set_ylabel('contaminated genome contigs')
+        from_yticks = [ 1 - i / from_sum for i in from_bases]
+        ax.set_yticks(from_yticks)
+        if use_labels:
+            ax.set_yticklabels([ f"{i:.0f}kb" for i in from_bases ])
+        else:
+            ax.set_yticklabels([])
+        
+        secax = ax.secondary_yaxis('right')       
+        secax.set_ylabel('source genome contigs')
+        to_yticks = [ 1 - i/to_sum for i in to_bases ]
+        secax.set_yticks(to_yticks)
+        if use_labels:
+            secax.set_yticklabels([ f"{i:.0f}kb" for i in to_bases ])
+        else:
+            secax.set_yticklabels([])
+
+        #plt.tick_params(axis='y', which='both', left=False, right=False)
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+        
+        return plt.gcf()
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("query_acc")
@@ -469,26 +642,31 @@ def main():
         help="directory with genome files in it",
     )
     p.add_argument("-i", "--info-file", help="CSV file with nicer names for accessions")
-    p.add_argument("-o", "--output-prefix", default="alignplot-")
+    p.add_argument("-o", "--output-prefix", default="alignplot")
     args = p.parse_args()
 
-    dotplot = StackedDotPlot(
-        args.query_acc, args.target_accs, args.info_file, args.genomes_directory
+    alignment = AlignmentContainer(
+        args.query_acc, args.target_accs, args.info_file, args.genomes_directory,
     )
-    _ = dotplot()
+    alignment.run()
+
+    dotplot = StackedDotPlot(alignment)
+    dotplot.plot()
 
     print(f"saving {args.output_prefix}-nucmer.png")
     plt.savefig(f"{args.output_prefix}-nucmer.png")
     plt.cla()
 
-    dotplot.use_mashmap = True
-    _ = dotplot()
+    alignment.run(use_mashmap=True)
+
+    dotplot = StackedDotPlot(alignment)
+    dotplot.plot()
 
     print(f"saving {args.output_prefix}-mashmap.png")
     plt.savefig(f"{args.output_prefix}-mashmap.png")
     plt.cla()
 
-    t_acc = dotplot.t_acc_list[0]
+    t_acc = alignment.t_acc_list[0]
     x, y, sat1 = dotplot.target_response_curve(t_acc)
     x2, y2, sat2 = dotplot.query_response_curve()
 
@@ -501,6 +679,13 @@ def main():
 
     print(f"saving {args.output_prefix}-response.png")
     plt.savefig(f"{args.output_prefix}-response.png")
+    plt.cla()
+
+    slope = AlignmentSlopeDiagram(alignment)
+    fig = slope.plot()
+
+    print(f"saving {args.output_prefix}-alignplot.png")
+    plt.savefig(f"{args.output_prefix}-alignplot.png")
     plt.cla()
 
     return 0
