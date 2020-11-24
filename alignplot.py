@@ -170,23 +170,29 @@ class AlignmentContainer:
         assert targetfile
         return targetfile
 
-    def run(self, use_mashmap=False):
+    def run_mashmap(self):
         "Run all the things, save the results."
         results = {}
 
         for t_acc, targetfile in zip(self.t_acc_list, self.targetfiles):
             name = self.target_names[t_acc]
-
-            if use_mashmap:
-                regions = self.run_mashmap(targetfile)
-            else:
-                regions = self.run_nucmer(targetfile)
-
+            regions = self._run_mashmap(targetfile)
             results[t_acc] = regions
 
         self.results = results
 
-    def run_mashmap(self, targetfile):
+    def run_nucmer(self):
+        "Run all the things, save the results."
+        results = {}
+
+        for t_acc, targetfile in zip(self.t_acc_list, self.targetfiles):
+            name = self.target_names[t_acc]
+            regions = self._run_nucmer(targetfile)
+            results[t_acc] = regions
+
+        self.results = results
+
+    def _run_mashmap(self, targetfile):
         "Run mashmap instead of nucmer."
         print("running mashmap...")
         tempdir = tempfile.mkdtemp()
@@ -237,7 +243,7 @@ class AlignmentContainer:
 
         return regions
 
-    def run_nucmer(self, targetfile):
+    def _run_nucmer(self, targetfile):
         "Run nucmer and show coords."
         print(f"running nucmer & show-coords for {targetfile}...")
         tempdir = tempfile.mkdtemp()
@@ -487,7 +493,7 @@ class AlignmentSlopeDiagram:
 
         queryfile = alignment.queryfile
 
-        # calculate and sort region summed kb in alignments over 95%            
+        # calculate and sort region summed kb in alignments over 95%
         regions_by_query = group_regions_by(regions, "query")
         regions_aligned_kb = calc_regions_aligned_bp(
             regions_by_query, "query", filter_by=lambda r: r.pident >= 95
@@ -624,7 +630,6 @@ class AlignmentSlopeDiagram:
         else:
             secax.set_yticklabels([])
 
-        #plt.tick_params(axis='y', which='both', left=False, right=False)
         ax.set_xticks([])
         ax.set_xticklabels([])
         
