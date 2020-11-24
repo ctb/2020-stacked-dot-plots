@@ -36,6 +36,13 @@ For now, if you want to try this out for yourself --
 
 ## examples
 
+### A gallery
+
+Please see
+[the rendered examples](https://ctb.github.io/2020-stacked-dot-plots/examples.html)
+for a gallery of comparisons along with some basic code. Some example figures
+are below.
+
 ### Shared sequences (contamination?) between two Genbank genomes.
 
 Here, the Rokubacterium (red, x axis) is probably contaminated by sequences
@@ -65,12 +72,6 @@ a strain of *Bacillus anthracis*.
 ![](images/example4.png)
 
 ![](images/example5.png)
-
-## A gallery
-
-Please see
-[the rendered examples](https://ctb.github.io/2020-stacked-dot-plots/examples.html)
-for a gallery of comparisons along with some basic code.
 
 ## contact
 
