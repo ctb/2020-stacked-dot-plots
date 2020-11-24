@@ -109,9 +109,9 @@ def load_contig_sizes(genomefile, init_d=None):
     return all_sizes
 
 
-class StackedDotPlot:
+class AlignmentContainer:
     """
-    Build a stacked dot plot.
+    Build an alignment between a query and a bunch of targets.
 
     Takes:
     * query accession,
@@ -123,7 +123,8 @@ class StackedDotPlot:
     endings = ".gz", ".fa", ".fna"
 
     def __init__(
-        self, q_acc, t_acc_list, info_file=None, genomes_dir=None, use_mashmap=False
+        self, q_acc, t_acc_list, info_file=None, genomes_dir=None,
+        use_mashmap=False,
     ):
         self.use_mashmap = use_mashmap
 
@@ -173,7 +174,7 @@ class StackedDotPlot:
         return targetfile
 
     def __call__(self):
-        "Run all the things, produce a plot."
+        "Run all the things, save the results."
         results = {}
 
         for t_acc, targetfile in zip(self.t_acc_list, self.targetfiles):
@@ -187,10 +188,9 @@ class StackedDotPlot:
             results[t_acc] = regions
 
         self.results = results
-        return self.plot()
 
     def run_mashmap(self, targetfile):
-        "Run mashmap. Deprecated."
+        "Run mashmap instead of nucmer."
         print("running mashmap...")
         tempdir = tempfile.mkdtemp()
         outfile = os.path.join(tempdir, "mashmap.out")
@@ -307,12 +307,19 @@ class StackedDotPlot:
 
         return regions
 
+
+class StackedDotPlot:
+    def __init__(self, alignment):
+        self.alignment = alignment
+
     def plot(self):
         "Do the actual stacked dotplot plotting."
-        if self.q_acc == self.query_name:
-            ylabel_text = f"{self.q_acc} (coords in kb)"
+        alignment = self.alignment
+
+        if alignment.q_acc == alignment.query_name:
+            ylabel_text = f"{alignment.q_acc} (coords in kb)"
         else:
-            ylabel_text = f"{self.q_acc}: {self.query_name} (kb)"
+            ylabel_text = f"{alignment.q_acc}: {alignment.query_name} (kb)"
         plt.ylabel(ylabel_text)
         plt.xlabel("coordinates of matches (scaled to kb)")
 
@@ -325,8 +332,8 @@ class StackedDotPlot:
         max_x = 0  # track where to start each target
 
         # iterate over each set of features, plotting lines.
-        for t_acc, color in zip(self.t_acc_list, colors):
-            name = self.target_names[t_acc]
+        for t_acc, color in zip(alignment.t_acc_list, colors):
+            name = alignment.target_names[t_acc]
             # @CTB if we move this out of the loop and plot self-x-self
             # there is an interestng effect of showing distribution. exploreme!
             t_starts = {}
@@ -335,7 +342,7 @@ class StackedDotPlot:
             sum_shared = 0
             line = None
             this_max_x = 0
-            for region in self.results[t_acc]:
+            for region in alignment.results[t_acc]:
                 sum_shared += region.qend - region.qstart
 
                 # calculate the base y position for this query contig --
@@ -375,10 +382,11 @@ class StackedDotPlot:
         return plt.gcf()
 
     def target_response_curve(self, t_acc):
-        regions = self.results[t_acc]
+        alignment = self.alignment
+        regions = alignment.results[t_acc]
 
         # first, find the targetfile (genome) for this accession
-        targetfile = self.get_targetfile(t_acc)
+        targetfile = alignment.get_targetfile(t_acc)
 
         # calculate and sort region summed kb in alignments over 95%
         regions_by_target = group_regions_by(regions, "target")
@@ -420,12 +428,14 @@ class StackedDotPlot:
         return numpy.array(x), numpy.array(y), saturation_point
 
     def query_response_curve(self):
+        alignment = self.alignment
+
         # aggregate regions over _all_ results
         regions = []
-        for k, v in self.results.items():
+        for k, v in alignment.results.items():
             regions.extend(v)
 
-        queryfile = self.queryfile
+        queryfile = alignment.queryfile
 
         # calculate and sort region summed kb in alignments over 95%
         regions_by_query = group_regions_by(regions, "query")
@@ -467,19 +477,18 @@ class StackedDotPlot:
         return numpy.array(x), numpy.array(y), saturation_point
 
 
-class AlignmentDiagram:
-    def __init__(self, dotplot):
-        self.dotplot = dotplot
+class AlignmentSlopeDiagram:
+    def __init__(self, alignment):
+        self.alignment = alignment
         
     def calculate(self, select_n=10, plot_all_contigs=False):
-        dotplot = self.dotplot
-        dotplot()
+        alignment = self.alignment
 
         regions = []
-        for k, v in dotplot.results.items():
+        for k, v in alignment.results.items():
             regions.extend(v)
 
-        queryfile = dotplot.queryfile
+        queryfile = alignment.queryfile
 
         # calculate and sort region summed kb in alignments over 95%            
         regions_by_query = group_regions_by(regions, "query")
@@ -492,10 +501,10 @@ class AlignmentDiagram:
         if select_n:
             region_items = region_items[:select_n]
 
-        query_sizes = load_contig_sizes(dotplot.queryfile)
+        query_sizes = load_contig_sizes(alignment.queryfile)
 
         target_sizes = {}
-        for targetfile in dotplot.targetfiles:
+        for targetfile in alignment.targetfiles:
             load_contig_sizes(targetfile, target_sizes)
 
 
@@ -637,31 +646,29 @@ def main():
     p.add_argument("-o", "--output-prefix", default="alignplot")
     args = p.parse_args()
 
-    dotplot = StackedDotPlot(
-        args.query_acc, args.target_accs, args.info_file, args.genomes_directory
+    alignment = AlignmentContainer(
+        args.query_acc, args.target_accs, args.info_file, args.genomes_directory,
     )
-    _ = dotplot()
+    alignment()
+
+    dotplot = StackedDotPlot(alignment)
+    dotplot.plot()
 
     print(f"saving {args.output_prefix}-nucmer.png")
     plt.savefig(f"{args.output_prefix}-nucmer.png")
     plt.cla()
 
-    dotplot.use_mashmap = True
-    _ = dotplot()
+    alignment.use_mashmap = True
+    alignment()
+
+    dotplot = StackedDotPlot(alignment)
+    dotplot.plot()
 
     print(f"saving {args.output_prefix}-mashmap.png")
     plt.savefig(f"{args.output_prefix}-mashmap.png")
     plt.cla()
 
-    alignme = AlignmentDiagram(dotplot)
-    alignme.calculate()
-    fig = alignme.plot()
-
-    print(f"saving {args.output_prefix}-alignplot.png")
-    plt.savefig(f"{args.output_prefix}-alignplot.png")
-    plt.cla()
-
-    t_acc = dotplot.t_acc_list[0]
+    t_acc = alignment.t_acc_list[0]
     x, y, sat1 = dotplot.target_response_curve(t_acc)
     x2, y2, sat2 = dotplot.query_response_curve()
 
@@ -674,6 +681,14 @@ def main():
 
     print(f"saving {args.output_prefix}-response.png")
     plt.savefig(f"{args.output_prefix}-response.png")
+    plt.cla()
+
+    slope = AlignmentSlopeDiagram(alignment)
+    slope.calculate()
+    fig = slope.plot()
+
+    print(f"saving {args.output_prefix}-alignplot.png")
+    plt.savefig(f"{args.output_prefix}-alignplot.png")
     plt.cla()
 
     return 0
