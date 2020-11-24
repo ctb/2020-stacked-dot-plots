@@ -653,7 +653,7 @@ def main():
     alignment = AlignmentContainer(
         args.query_acc, args.target_accs, args.info_file, args.genomes_directory,
     )
-    alignment.run()
+    alignment.run_nucmer()
 
     dotplot = StackedDotPlot(alignment)
     dotplot.plot()
@@ -662,7 +662,7 @@ def main():
     plt.savefig(f"{args.output_prefix}-nucmer.png")
     plt.cla()
 
-    alignment.run(use_mashmap=True)
+    alignment.run_mashmap()
 
     dotplot = StackedDotPlot(alignment)
     dotplot.plot()
