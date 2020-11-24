@@ -66,6 +66,12 @@ a strain of *Bacillus anthracis*.
 
 ![](images/example5.png)
 
+## A gallery
+
+Please see
+[the rendered examples](https://ctb.github.io/2020-stacked-dot-plots/examples.html)
+for a gallery of comparisons.
+
 ## contact
 
 Titus Brown, titus@idyll.org
