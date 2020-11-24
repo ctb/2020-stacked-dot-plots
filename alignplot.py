@@ -94,11 +94,17 @@ def region_size(region, by_type):
     raise Exception(f"unhandled by_type {by_type}")
 
 
-def load_contig_sizes(genomefile):
+def load_contig_sizes(genomefile, init_d=None):
     "load in all the actual contig sizes for this genome (in kb)"
-    all_sizes = {}
-    for record in screed.open(genomefile):  # @CTB
-        all_sizes[record.name.split()[0]] = len(record.sequence) / 1e3
+    if init_d is None:
+        all_sizes = {}
+    else:
+        all_sizes = init_d
+
+    for record in screed.open(genomefile):
+        name = record.name.split()[0]
+        assert name not in all_sizes
+        all_sizes[name] = len(record.sequence) / 1e3
 
     return all_sizes
 
@@ -490,7 +496,7 @@ class AlignmentDiagram:
 
         target_sizes = {}
         for targetfile in dotplot.targetfiles:
-            target_sizes.update(load_contig_sizes(targetfile))
+            load_contig_sizes(targetfile, target_sizes)
 
 
         query_list = []
@@ -508,13 +514,13 @@ class AlignmentDiagram:
                 if query_idx is None:
                     query_idx_d[a.query] = len(query_list)
                     query_idx = len(query_list)
-                    query_list.append(a.qsize)
+                    query_list.append(query_sizes[a.query])
 
                 target_idx = target_idx_d.get(a.target)
                 if target_idx is None:
                     target_idx_d[a.target] = len(target_list)
                     target_idx = len(target_list)
-                    target_list.append(a.tsize)
+                    target_list.append(target_sizes[a.target])
 
                 assert a.qstart <= query_list[query_idx]
                 assert a.qstart >= 0
@@ -628,7 +634,7 @@ def main():
         help="directory with genome files in it",
     )
     p.add_argument("-i", "--info-file", help="CSV file with nicer names for accessions")
-    p.add_argument("-o", "--output-prefix", default="alignplot-")
+    p.add_argument("-o", "--output-prefix", default="alignplot")
     args = p.parse_args()
 
     dotplot = StackedDotPlot(
@@ -645,6 +651,14 @@ def main():
 
     print(f"saving {args.output_prefix}-mashmap.png")
     plt.savefig(f"{args.output_prefix}-mashmap.png")
+    plt.cla()
+
+    alignme = AlignmentDiagram(dotplot)
+    alignme.calculate()
+    fig = alignme.plot()
+
+    print(f"saving {args.output_prefix}-alignplot.png")
+    plt.savefig(f"{args.output_prefix}-alignplot.png")
     plt.cla()
 
     t_acc = dotplot.t_acc_list[0]
