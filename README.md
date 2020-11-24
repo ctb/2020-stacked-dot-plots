@@ -70,10 +70,14 @@ a strain of *Bacillus anthracis*.
 
 Please see
 [the rendered examples](https://ctb.github.io/2020-stacked-dot-plots/examples.html)
-for a gallery of comparisons.
+for a gallery of comparisons along with some basic code.
 
 ## contact
 
 Titus Brown, titus@idyll.org
+
+All code here is Copyright: 2020, The Regents of the University of
+California. It is freely available for use and reuse under the BSD
+3-Clause license; please see the `LICENSE` file for more info.
 
 CTB Nov 2020
