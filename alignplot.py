@@ -226,6 +226,9 @@ class AlignmentContainer:
                 tend,
                 pident,
             ) = line
+            if strand == '-':
+                tstart, tend = tend, tstart
+
             region = AlignedRegion(
                 qsize=int(qsize) / 1e3,
                 qstart=int(qstart) / 1e3,
@@ -300,8 +303,6 @@ class AlignmentContainer:
                 target=target,
             )
 
-            # @CTB check orientation somehow!
-
             # identity and length filter - @CTB move outside!
             #            if region.pident < 95 or abs(region.qend - region.qstart) < 0.5:
             #                continue
@@ -337,8 +338,9 @@ class StackedDotPlot:
         # iterate over each set of features, plotting lines.
         for t_acc, color in zip(alignment.t_acc_list, colors):
             name = alignment.target_names[t_acc]
-            # @CTB if we move this out of the loop and plot self-x-self
-            # there is an interestng effect of showing distribution. exploreme!
+            # CTB: if we move this out of the loop and plot self-x-self
+            # there is an interesting effect of showing distribution.
+            # exploreme!
             t_starts = {}
             t_sofar = 0
 
