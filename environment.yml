@@ -6,6 +6,8 @@ dependencies:
     - matplotlib
     - numpy
     - screed
+    - mashmap=2.0
+    - mummer=3.23
     - pip
     - pip:
       - pyinterval
