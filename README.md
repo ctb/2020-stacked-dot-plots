@@ -1,5 +1,7 @@
 # Stacked dot plots
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/ctb/2020-stacked-dot-plots/latest?filepath=examples.ipynb)
+
 ## an exploratory repository
 
 Run [mashmap](https://github.com/marbl/MashMap) or
