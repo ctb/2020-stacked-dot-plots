@@ -3,8 +3,10 @@
 Class etc to produce a stacked dotplot and other genome overlap/contamination
 stats.
 
-TODO:
-* argparse the thang
+See refactored version over in github.com/dib-lab/charcoal,
+charcoal/alignplot.py.
+
+CTB 12/1/2020
 """
 import sys
 import argparse
@@ -19,6 +21,7 @@ import subprocess
 import os
 import glob
 from collections import defaultdict, namedtuple
+from itertools import cycle
 import numpy
 
 import screed
@@ -336,7 +339,7 @@ class StackedDotPlot:
         max_x = 0  # track where to start each target
 
         # iterate over each set of features, plotting lines.
-        for t_acc, color in zip(alignment.t_acc_list, colors):
+        for t_acc, color in zip(alignment.t_acc_list, cycle(colors)):
             name = alignment.target_names[t_acc]
             # CTB: if we move this out of the loop and plot self-x-self
             # there is an interesting effect of showing distribution.
